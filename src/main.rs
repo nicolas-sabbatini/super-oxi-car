@@ -5,6 +5,7 @@ use config::{WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH};
 mod camera;
 mod config;
 mod player;
+mod ui;
 
 fn main() {
     let mut app = App::new();
@@ -24,7 +25,7 @@ fn main() {
     )
     .insert_resource(Msaa::Off);
 
-    app.add_plugins((CameraPlugin, player::Plug));
+    app.add_plugins((CameraPlugin, player::Plug, ui::Plug));
 
     app.run();
 }

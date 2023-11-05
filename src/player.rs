@@ -1,5 +1,12 @@
 use bevy::prelude::*;
 
+use crate::{
+    config::{WINDOW_HEIGHT, WINDOW_WIDTH},
+    ui::TOP_BAR_HEIGHT,
+};
+
+const TILE_SIZE: f32 = 32.0;
+
 #[derive(Component)]
 struct Player;
 
@@ -30,7 +37,7 @@ fn set_up_player(
 ) {
     let texture_handle = asset_server.load("car.png");
     let texture_atlas =
-        TextureAtlas::from_grid(texture_handle, Vec2::splat(32.0), 12, 1, None, None);
+        TextureAtlas::from_grid(texture_handle, Vec2::splat(TILE_SIZE), 12, 1, None, None);
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     commands
         .spawn((
@@ -82,10 +89,10 @@ fn move_player(
 ) {
     for (mut transform, mut movement) in &mut query {
         if keys.pressed(KeyCode::A) {
-            movement.angle += 0.01;
+            movement.angle += 0.015;
         }
         if keys.pressed(KeyCode::D) {
-            movement.angle -= 0.01;
+            movement.angle -= 0.015;
         }
 
         movement.acceleration = f32::min(movement.top_aceleration, movement.acceleration + 0.1);
@@ -93,5 +100,19 @@ fn move_player(
             Vec3::new(movement.angle.cos(), movement.angle.sin(), 0.0) * movement.acceleration;
         movement.velocity = (target_velocity - movement.velocity) * movement.drag;
         transform.translation += movement.velocity;
+        let limit_x = (WINDOW_WIDTH + TILE_SIZE) * 0.5;
+        let limit_y = (WINDOW_HEIGHT + TILE_SIZE) * 0.5;
+        if transform.translation.x > limit_x {
+            transform.translation.x = -limit_x;
+        }
+        if transform.translation.x < -limit_x {
+            transform.translation.x = limit_x;
+        }
+        if transform.translation.y > limit_y - TOP_BAR_HEIGHT {
+            transform.translation.y = -limit_y;
+        }
+        if transform.translation.y < -limit_y {
+            transform.translation.y = limit_y - TOP_BAR_HEIGHT;
+        }
     }
 }
