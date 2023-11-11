@@ -3,9 +3,8 @@ use bevy::prelude::*;
 use crate::{
     config::{WINDOW_HEIGHT, WINDOW_WIDTH},
     ui::TOP_BAR_HEIGHT,
+    TILE_SIZE,
 };
-
-const TILE_SIZE: f32 = 32.0;
 
 #[derive(Component)]
 struct Player;

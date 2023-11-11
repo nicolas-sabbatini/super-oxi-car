@@ -16,9 +16,9 @@ pub const WINDOW_CAMERA_CLEAR_COLOR: Color = Color::Rgba {
 pub const GAME_CAMERA_NAME: &str = "game camera";
 pub const GAME_CAMERA_TARGET_NAME: &str = "game camera target";
 pub const GAME_CAMERA_CLEAR_COLOR: Color = Color::Rgba {
-    red: 0xFF as f32 / 255.0,
-    green: 0xF1 as f32 / 255.0,
-    blue: 0xE8 as f32 / 255.0,
+    red: 0x83 as f32 / 255.0,
+    green: 0x76 as f32 / 255.0,
+    blue: 0x9C as f32 / 255.0,
     alpha: 1.0,
 };
 

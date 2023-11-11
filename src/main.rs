@@ -2,10 +2,13 @@ use bevy::{prelude::*, window::WindowResolution};
 use camera::CameraPlugin;
 use config::{WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH};
 
+mod barrel;
 mod camera;
 mod config;
 mod player;
 mod ui;
+
+const TILE_SIZE: f32 = 32.0;
 
 fn main() {
     let mut app = App::new();
@@ -25,7 +28,7 @@ fn main() {
     )
     .insert_resource(Msaa::Off);
 
-    app.add_plugins((CameraPlugin, player::Plug, ui::Plug));
+    app.add_plugins((CameraPlugin, player::Plug, ui::Plug, barrel::Plug));
 
     app.run();
 }
