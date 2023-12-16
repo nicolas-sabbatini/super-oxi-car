@@ -1,20 +1,18 @@
-use bevy::{
-    prelude::*,
-    text::{BreakLineOn, Text2dBounds},
-};
+use bevy::{prelude::*, text::BreakLineOn};
 
-use crate::config::{P8_CREAM, P8_GREY_DARK, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::config::{P8_WINE, WINDOW_HEIGHT, WINDOW_WIDTH};
 
-pub const TOP_BAR_HEIGHT: f32 = 64.0;
-const TOP_BAR_WIDTH: f32 = WINDOW_WIDTH;
+const SCORE_HEIGHT: f32 = 64.0;
+const SCORE_OFFSET: f32 = WINDOW_WIDTH * -0.4;
 
-const BOX_SIZE: Vec2 = Vec2::new(TOP_BAR_WIDTH, TOP_BAR_HEIGHT);
-const TEXT_SIZE: Vec2 = Vec2::new(TOP_BAR_WIDTH * 0.5, TOP_BAR_HEIGHT);
+#[derive(Component)]
+struct Score;
 
 pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_ui);
+        app.add_systems(Startup, setup_ui)
+            .add_systems(Update, update_ui);
     }
 }
 
@@ -23,35 +21,32 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     let text_style = TextStyle {
         font,
         font_size: 18.0,
-        color: P8_GREY_DARK,
+        color: P8_WINE,
     };
 
-    commands.spawn(SpriteBundle {
-        sprite: Sprite {
-            color: P8_CREAM,
-            custom_size: Some(BOX_SIZE),
+    commands.spawn((
+        Text2dBundle {
+            text: Text {
+                sections: vec![
+                    TextSection::new("Score: ", text_style.clone()),
+                    TextSection::new("000000", text_style),
+                ],
+                alignment: TextAlignment::Left,
+                linebreak_behavior: BreakLineOn::AnyCharacter,
+            },
+            transform: Transform::from_translation(Vec3::new(
+                SCORE_OFFSET,
+                (WINDOW_HEIGHT - SCORE_HEIGHT) * 0.5,
+                99.,
+            )),
             ..default()
         },
-        transform: Transform::from_translation(Vec3::new(
-            0.0,
-            (WINDOW_HEIGHT - TOP_BAR_HEIGHT) * 0.5,
-            98.0,
-        )),
-        ..default()
-    });
+        Score,
+    ));
+}
 
-    commands.spawn(Text2dBundle {
-        text: Text {
-            sections: vec![TextSection::new("Player 1 Score: 1000", text_style)],
-            alignment: TextAlignment::Left,
-            linebreak_behavior: BreakLineOn::AnyCharacter,
-        },
-        text_2d_bounds: Text2dBounds { size: TEXT_SIZE },
-        transform: Transform::from_translation(Vec3::new(
-            TOP_BAR_WIDTH * -0.25,
-            (WINDOW_HEIGHT - TOP_BAR_HEIGHT) * 0.5,
-            99.,
-        )),
-        ..default()
-    });
+fn update_ui(mut query: Query<&mut Text, With<Score>>) {
+    let mut text = query.single_mut();
+    let score = text.sections[1].value.parse::<usize>().unwrap();
+    text.sections[1].value = format!("{:0>6}", score + 1);
 }
