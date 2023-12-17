@@ -1,7 +1,9 @@
+#![allow(clippy::needless_pass_by_value, clippy::cast_precision_loss)]
 use bevy::prelude::*;
 
 use crate::{
     config::{WINDOW_HEIGHT, WINDOW_WIDTH},
+    ui::NewScore,
     TILE_SIZE,
 };
 
@@ -23,11 +25,17 @@ struct Movement {
     velocity: Vec3,
 }
 
+#[derive(Component)]
+struct ScoreManager {
+    score: usize,
+    timer: Timer,
+}
+
 pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, set_up_player)
-            .add_systems(Update, (rotate_player, move_player));
+            .add_systems(Update, (rotate_player, move_player, update_score));
     }
 }
 
@@ -50,6 +58,10 @@ fn set_up_player(
                 drag: 0.1,
                 angle: 0.0,
                 velocity: Vec3::new(0.0, 0.0, 0.0),
+            },
+            ScoreManager {
+                score: 0,
+                timer: Timer::from_seconds(1.0, TimerMode::Repeating),
             },
             Player,
         ))
@@ -132,6 +144,20 @@ fn move_player(
         }
         if transform.translation.y < -screen_limit_y {
             transform.translation.y = screen_limit_y;
+        }
+    }
+}
+
+fn update_score(
+    mut query: Query<&mut ScoreManager, With<Player>>,
+    time: Res<Time>,
+    mut new_score: EventWriter<NewScore>,
+) {
+    for mut score in &mut query {
+        score.timer.tick(time.delta());
+        if score.timer.finished() {
+            score.score += 1;
+            new_score.send(NewScore(score.score));
         }
     }
 }

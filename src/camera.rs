@@ -1,3 +1,10 @@
+#![allow(
+    clippy::needless_pass_by_value,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::module_name_repetitions
+)]
 use bevy::{
     core_pipeline::clear_color::ClearColorConfig,
     prelude::*,
@@ -14,8 +21,6 @@ use crate::config::{
 };
 
 const BGRA_PIXEL_SIZE: usize = 4;
-const WHITE_BGRA: [u8; (WINDOW_WIDTH * WINDOW_HEIGHT) as usize * BGRA_PIXEL_SIZE] =
-    [255; (WINDOW_WIDTH * WINDOW_HEIGHT) as usize * BGRA_PIXEL_SIZE];
 
 #[derive(Debug, Component)]
 pub struct GameCamera;
@@ -57,7 +62,7 @@ fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut render_target_image = Image::new_fill(
         render_target_size,
         TextureDimension::D2,
-        &WHITE_BGRA,
+        &vec![255; (WINDOW_WIDTH * WINDOW_HEIGHT) as usize * BGRA_PIXEL_SIZE],
         TextureFormat::Bgra8UnormSrgb,
     );
     // Create render target image in wasm targets
@@ -65,7 +70,7 @@ fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut render_target_image = Image::new_fill(
         render_target_size,
         TextureDimension::D2,
-        &WHITE_BGRA,
+        &vec![255; (WINDOW_WIDTH * WINDOW_HEIGHT) as usize * BGRA_PIXEL_SIZE],
         TextureFormat::Rgba8UnormSrgb,
     );
     // By default an image can't be used as a render target so we need to setup the render target falg

@@ -16,12 +16,12 @@ struct BarrelProperties {
 pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, set_up_barrel)
+        app.add_systems(Startup, spawn_barrel)
             .add_systems(Update, (update_barrel, reotate_barrel));
     }
 }
 
-fn set_up_barrel(
+fn spawn_barrel(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,

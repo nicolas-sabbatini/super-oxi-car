@@ -1,3 +1,4 @@
+#![allow(clippy::needless_pass_by_value)]
 use bevy::{prelude::*, text::BreakLineOn};
 
 use crate::config::{P8_WINE, WINDOW_HEIGHT, WINDOW_WIDTH};
@@ -8,10 +9,14 @@ const SCORE_OFFSET: f32 = WINDOW_WIDTH * -0.4;
 #[derive(Component)]
 struct Score;
 
+#[derive(Event)]
+pub struct NewScore(pub usize);
+
 pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_ui)
+        app.add_event::<NewScore>()
+            .add_systems(Startup, setup_ui)
             .add_systems(Update, update_ui);
     }
 }
@@ -45,8 +50,9 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn update_ui(mut query: Query<&mut Text, With<Score>>) {
-    let mut text = query.single_mut();
-    let score = text.sections[1].value.parse::<usize>().unwrap();
-    text.sections[1].value = format!("{:0>6}", score + 1);
+fn update_ui(mut query: Query<&mut Text, With<Score>>, mut new_score: EventReader<NewScore>) {
+    if let Some(new_score) = new_score.read().last() {
+        let mut text = query.single_mut();
+        text.sections[1].value = format!("{:0>6}", new_score.0);
+    }
 }
