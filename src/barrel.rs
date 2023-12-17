@@ -4,7 +4,7 @@
     clippy::cast_possible_wrap,
     clippy::cast_possible_truncation
 )]
-use bevy::prelude::*;
+use bevy::{prelude::*, transform};
 use bevy_turborand::prelude::*;
 
 use crate::{
@@ -12,23 +12,30 @@ use crate::{
     TILE_SIZE,
 };
 
-#[derive(Component)]
-struct Barrel;
-
-#[derive(Component)]
-struct BarrelSprite;
-
-#[derive(Component)]
-struct BarrelProperties {
-    angle: f32,
-    time: Timer,
-}
+const SPAWN_DELAY: f32 = 2.5;
+const EXPLOTION_DELAY: f32 = 5.0;
 
 #[derive(Component)]
 struct BarrelManager {
     dificulty: usize,
     rng: RngComponent,
 }
+
+#[derive(Component)]
+struct Barrel;
+
+#[derive(Component)]
+struct BarrelSpawnAnimation {
+    time: Timer,
+}
+
+#[derive(Component)]
+struct BarrelExplotionAnimation {
+    time: Timer,
+}
+
+#[derive(Component)]
+struct BarrelSprite(usize);
 
 #[derive(Resource)]
 struct BarrelAssets(Handle<TextureAtlas>);
@@ -40,7 +47,10 @@ pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (load_barrel, setup_manager))
-            .add_systems(Update, (manage_barrels, update_barrel))
+            .add_systems(
+                Update,
+                (manage_barrels, update_barrel_explotion, update_barrel_spawn),
+            )
             .insert_resource(BarrelCount(0));
     }
 }
@@ -59,7 +69,7 @@ fn load_barrel(
 
 fn setup_manager(mut commands: Commands, mut global_rng: ResMut<GlobalRng>) {
     commands.spawn(BarrelManager {
-        dificulty: 10,
+        dificulty: 3,
         rng: RngComponent::from(&mut global_rng),
     });
 }
@@ -71,8 +81,8 @@ fn manage_barrels(
     mut query: Query<&mut BarrelManager>,
 ) {
     let mut barrel_manager = query.single_mut();
-    let x_limit = (WINDOW_WIDTH * 0.5) as i32;
-    let y_limit = (WINDOW_HEIGHT * 0.5) as i32;
+    let x_limit = ((WINDOW_WIDTH - TILE_SIZE) * 0.5) as i32;
+    let y_limit = ((WINDOW_HEIGHT - TILE_SIZE) * 0.5) as i32;
 
     while barrel_count.0 < barrel_manager.dificulty as isize {
         let x = barrel_manager.rng.i32(-x_limit..=x_limit) as f32;
@@ -86,7 +96,6 @@ fn manage_barrels(
                 1.5 * std::f32::consts::PI,
             ])
             .unwrap();
-        dbg!(x, y, angle);
         spawn_barrel(&mut commands, &texture_atlas_handle, x, y, *angle);
         barrel_count.0 += 1;
     }
@@ -102,14 +111,16 @@ fn spawn_barrel(
     commands
         .spawn((
             SpatialBundle::from_transform(Transform::from_xyz(x, y, 0.0)),
-            BarrelProperties {
-                angle,
-                time: Timer::from_seconds(1.0, TimerMode::Once),
+            BarrelSpawnAnimation {
+                time: Timer::from_seconds(SPAWN_DELAY, TimerMode::Once),
             },
             Barrel,
         ))
         .with_children(|barrel| {
+            let rotation = Quat::from_rotation_z(angle);
             for i in 0..12 {
+                let mut transform = Transform::from_xyz(0.0, WINDOW_HEIGHT + i as f32, i as f32);
+                transform.rotation = rotation;
                 barrel.spawn((
                     SpriteSheetBundle {
                         texture_atlas: texture_atlas_handle.0.clone(),
@@ -118,28 +129,63 @@ fn spawn_barrel(
                             flip_x: true,
                             ..default()
                         },
-                        transform: Transform::from_xyz(0.0, 1.0 * i as f32, i as f32),
+                        transform,
                         ..default()
                     },
-                    BarrelSprite,
+                    BarrelSprite(i),
                 ));
             }
         });
 }
 
-fn update_barrel(
-    mut barrel_query: Query<(&Children, &mut BarrelProperties, Entity), With<Barrel>>,
-    mut sprites_query: Query<&mut Transform, With<BarrelSprite>>,
+fn get_eased_percent(percent: f32) -> f32 {
+    // https://github.com/PistonDevelopers/interpolation/blob/98f3e451b49a3901c9c88581beb80757bd475e07/src/ease.rs#L363
+    if percent < 4.0 / 11.0 {
+        (121.0 * percent * percent) / 16.0
+    } else if percent < 8.0 / 11.0 {
+        (363.0 / 40.0 * percent * percent) - (99.0 / 10.0 * percent) + 17.0 / 5.0
+    } else if percent < 9.0 / 10.0 {
+        (4356.0 / 361.0 * percent * percent) - (35442.0 / 1805.0 * percent) + 16061.0 / 1805.0
+    } else {
+        (54.0 / 5.0 * percent * percent) - (513.0 / 25.0 * percent) + 268.0 / 25.0
+    }
+}
+
+fn aply_percent_by_index(index: usize, percent: f32) -> Vec3 {
+    let height = f32::max(0.0, WINDOW_HEIGHT - (WINDOW_HEIGHT * percent));
+    Vec3::new(0.0, height + index as f32, index as f32)
+}
+
+fn update_barrel_spawn(
+    mut barrel_query: Query<(&mut BarrelSpawnAnimation, &Children, Entity), With<Barrel>>,
+    mut sprites_query: Query<(&mut Transform, &BarrelSprite), Without<Barrel>>,
+    time: Res<Time>,
+    mut commands: Commands,
+) {
+    for (mut barrel_props, children, entity) in &mut barrel_query {
+        barrel_props.time.tick(time.delta());
+        if barrel_props.time.finished() {
+            commands.entity(entity).remove::<BarrelSpawnAnimation>();
+            commands.entity(entity).insert(BarrelExplotionAnimation {
+                time: Timer::from_seconds(EXPLOTION_DELAY, TimerMode::Once),
+            });
+        }
+        let percent = get_eased_percent(barrel_props.time.percent());
+        for child in children {
+            if let Ok((mut transform, index)) = sprites_query.get_mut(*child) {
+                transform.translation = aply_percent_by_index(index.0, percent);
+            }
+        }
+    }
+}
+
+fn update_barrel_explotion(
+    mut barrel_query: Query<(&mut BarrelExplotionAnimation, Entity), With<Barrel>>,
     time: Res<Time>,
     mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
 ) {
-    for (children, mut barrel_props, e) in &mut barrel_query {
-        let rotation = Quat::from_rotation_z(barrel_props.angle);
-        for child in children {
-            let mut transform = sprites_query.get_mut(*child).unwrap();
-            transform.rotation = rotation;
-        }
+    for (mut barrel_props, e) in &mut barrel_query {
         barrel_props.time.tick(time.delta());
         if barrel_props.time.finished() {
             commands.entity(e).despawn_recursive();

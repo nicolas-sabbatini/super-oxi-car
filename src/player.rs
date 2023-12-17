@@ -52,9 +52,9 @@ fn set_up_player(
         .spawn((
             SpatialBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
             Movement {
-                top_aceleration: 25.0,
+                top_aceleration: 30.0,
                 acceleration: 0.0,
-                acceleration_rate: 0.1,
+                acceleration_rate: 0.2,
                 drag: 0.1,
                 angle: 0.0,
                 velocity: Vec3::new(0.0, 0.0, 0.0),
