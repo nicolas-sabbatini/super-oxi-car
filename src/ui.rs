@@ -1,7 +1,7 @@
 #![allow(clippy::needless_pass_by_value)]
 use bevy::{prelude::*, text::BreakLineOn};
 
-use crate::config::{P8_WINE, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::config::{P8_BLACK, WINDOW_HEIGHT, WINDOW_WIDTH};
 
 const SCORE_HEIGHT: f32 = 64.0;
 const SCORE_OFFSET: f32 = WINDOW_WIDTH * -0.4;
@@ -26,7 +26,7 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
     let text_style = TextStyle {
         font,
         font_size: 18.0,
-        color: P8_WINE,
+        color: P8_BLACK,
     };
 
     commands.spawn((

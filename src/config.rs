@@ -108,4 +108,4 @@ pub const WINDOW_CAMERA_CLEAR_COLOR: Color = P8_BLACK;
 
 pub const GAME_CAMERA_NAME: &str = "game camera";
 pub const GAME_CAMERA_TARGET_NAME: &str = "game camera target";
-pub const GAME_CAMERA_CLEAR_COLOR: Color = P8_LIGHT_GREY;
+pub const GAME_CAMERA_CLEAR_COLOR: Color = P8_CREAM;

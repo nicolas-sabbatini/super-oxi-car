@@ -1,4 +1,5 @@
 use bevy::{prelude::*, window::WindowResolution};
+use bevy_turborand::prelude::RngPlugin;
 use camera::CameraPlugin;
 use config::{WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH};
 
@@ -13,7 +14,7 @@ const TILE_SIZE: f32 = 32.0;
 fn main() {
     let mut app = App::new();
 
-    app.add_plugins(
+    app.add_plugins((
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
@@ -25,7 +26,8 @@ fn main() {
                 ..default()
             })
             .set(ImagePlugin::default_nearest()),
-    )
+        RngPlugin::default(),
+    ))
     .insert_resource(Msaa::Off);
 
     app.add_plugins((CameraPlugin, player::Plug, ui::Plug, barrel::Plug));
