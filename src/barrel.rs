@@ -4,7 +4,7 @@
     clippy::cast_possible_wrap,
     clippy::cast_possible_truncation
 )]
-use bevy::{prelude::*, transform};
+use bevy::{ecs::system::SystemId, prelude::*};
 use bevy_turborand::prelude::*;
 
 use crate::{
@@ -18,7 +18,8 @@ const EXPLOTION_DELAY: f32 = 5.0;
 #[derive(Component)]
 struct BarrelManager {
     dificulty: usize,
-    rng: RngComponent,
+    spawn_time: Timer,
+    spawn_system: SystemId,
 }
 
 #[derive(Component)]
@@ -67,47 +68,48 @@ fn load_barrel(
     commands.insert_resource(BarrelAssets(texture_atlas_handle));
 }
 
-fn setup_manager(mut commands: Commands, mut global_rng: ResMut<GlobalRng>) {
-    commands.spawn(BarrelManager {
+fn setup_manager(world: &mut World) {
+    let spawn_barrel = world.register_system(spawn_barrel);
+    world.spawn(BarrelManager {
         dificulty: 3,
-        rng: RngComponent::from(&mut global_rng),
+        spawn_time: Timer::from_seconds(0.5, TimerMode::Repeating),
+        spawn_system: spawn_barrel,
     });
 }
 
 fn manage_barrels(
-    mut commands: Commands,
-    texture_atlas_handle: Res<BarrelAssets>,
     mut barrel_count: ResMut<BarrelCount>,
     mut query: Query<&mut BarrelManager>,
+    mut commands: Commands,
+    time: Res<Time>,
 ) {
     let mut barrel_manager = query.single_mut();
-    let x_limit = ((WINDOW_WIDTH - TILE_SIZE) * 0.5) as i32;
-    let y_limit = ((WINDOW_HEIGHT - TILE_SIZE) * 0.5) as i32;
-
+    barrel_manager.spawn_time.tick(time.delta());
     while barrel_count.0 < barrel_manager.dificulty as isize {
-        let x = barrel_manager.rng.i32(-x_limit..=x_limit) as f32;
-        let y = barrel_manager.rng.i32(-y_limit..=y_limit) as f32;
-        let angle = barrel_manager
-            .rng
-            .sample::<f32>(&[
-                0.0,
-                0.5 * std::f32::consts::PI,
-                std::f32::consts::PI,
-                1.5 * std::f32::consts::PI,
-            ])
-            .unwrap();
-        spawn_barrel(&mut commands, &texture_atlas_handle, x, y, *angle);
+        commands.run_system(barrel_manager.spawn_system);
         barrel_count.0 += 1;
     }
 }
 
 fn spawn_barrel(
-    commands: &mut Commands,
-    texture_atlas_handle: &Res<BarrelAssets>,
-    x: f32,
-    y: f32,
-    angle: f32,
+    mut commands: Commands,
+    texture_atlas_handle: Res<BarrelAssets>,
+    mut global_rng: ResMut<GlobalRng>,
 ) {
+    let x_limit = ((WINDOW_WIDTH - TILE_SIZE) * 0.5) as i32;
+    let y_limit = ((WINDOW_HEIGHT - TILE_SIZE) * 0.5) as i32;
+
+    let x = global_rng.i32(-x_limit..=x_limit) as f32;
+    let y = global_rng.i32(-y_limit..=y_limit) as f32;
+    let angle = global_rng
+        .sample::<f32>(&[
+            0.0,
+            0.5 * std::f32::consts::PI,
+            std::f32::consts::PI,
+            1.5 * std::f32::consts::PI,
+        ])
+        .unwrap();
+
     commands
         .spawn((
             SpatialBundle::from_transform(Transform::from_xyz(x, y, 0.0)),
@@ -117,7 +119,7 @@ fn spawn_barrel(
             Barrel,
         ))
         .with_children(|barrel| {
-            let rotation = Quat::from_rotation_z(angle);
+            let rotation = Quat::from_rotation_z(*angle);
             for i in 0..12 {
                 let mut transform = Transform::from_xyz(0.0, WINDOW_HEIGHT + i as f32, i as f32);
                 transform.rotation = rotation;
