@@ -2,22 +2,29 @@
     clippy::needless_pass_by_value,
     clippy::cast_precision_loss,
     clippy::cast_possible_wrap,
-    clippy::cast_possible_truncation
+    clippy::cast_possible_truncation,
+    clippy::type_complexity
 )]
-use bevy::{ecs::system::SystemId, prelude::*};
+use bevy::{
+    ecs::system::SystemId,
+    prelude::*,
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+};
 use bevy_turborand::prelude::*;
+use interpolation::Ease;
 
 use crate::{
-    config::{WINDOW_HEIGHT, WINDOW_WIDTH},
+    config::{P8_GREY, WINDOW_HEIGHT, WINDOW_WIDTH},
     TILE_SIZE,
 };
 
-const SPAWN_DELAY: f32 = 2.5;
-const EXPLOTION_DELAY: f32 = 5.0;
+const SPAWN_MIN_DELAY: f32 = 0.4;
+const SPAWN_ANIMATION_DURATION: f32 = 2.5;
+const EXPLOSION_ANIMATION_DURATION: f32 = 5.0;
 
 #[derive(Component)]
 struct BarrelManager {
-    dificulty: usize,
+    dificulty: f32,
     spawn_time: Timer,
     spawn_system: SystemId,
 }
@@ -31,18 +38,25 @@ struct BarrelSpawnAnimation {
 }
 
 #[derive(Component)]
-struct BarrelExplotionAnimation {
+struct BarrelExplosionAnimation {
     time: Timer,
 }
 
 #[derive(Component)]
 struct BarrelSprite(usize);
 
-#[derive(Resource)]
-struct BarrelAssets(Handle<TextureAtlas>);
+#[derive(Component)]
+struct BarrelShadow;
 
 #[derive(Resource)]
-struct BarrelCount(isize);
+struct BarrelAssets {
+    sprite_texture: Handle<TextureAtlas>,
+    shadow_mesh: Mesh2dHandle,
+    shadow_material: Handle<ColorMaterial>,
+}
+
+#[derive(Resource)]
+struct BarrelCount(f32);
 
 pub struct Plug;
 impl Plugin for Plug {
@@ -50,9 +64,13 @@ impl Plugin for Plug {
         app.add_systems(Startup, (load_barrel, setup_manager))
             .add_systems(
                 Update,
-                (manage_barrels, update_barrel_explotion, update_barrel_spawn),
+                (
+                    manage_barrels,
+                    update_barrel_explosion,
+                    update_barrel_spawn_animation,
+                ),
             )
-            .insert_resource(BarrelCount(0));
+            .insert_resource(BarrelCount(0.0));
     }
 }
 
@@ -60,19 +78,27 @@ fn load_barrel(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     let texture_handle = asset_server.load("barrel.png");
     let texture_atlas =
         TextureAtlas::from_grid(texture_handle, Vec2::splat(TILE_SIZE), 12, 1, None, None);
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
-    commands.insert_resource(BarrelAssets(texture_atlas_handle));
+    commands.insert_resource(BarrelAssets {
+        sprite_texture: texture_atlas_handle,
+        shadow_mesh: meshes
+            .add(shape::Circle::new(TILE_SIZE * 0.5).into())
+            .into(),
+        shadow_material: materials.add(P8_GREY.into()),
+    });
 }
 
 fn setup_manager(world: &mut World) {
     let spawn_barrel = world.register_system(spawn_barrel);
     world.spawn(BarrelManager {
-        dificulty: 3,
-        spawn_time: Timer::from_seconds(0.5, TimerMode::Repeating),
+        dificulty: 6.0,
+        spawn_time: Timer::from_seconds(SPAWN_MIN_DELAY, TimerMode::Once),
         spawn_system: spawn_barrel,
     });
 }
@@ -81,13 +107,18 @@ fn manage_barrels(
     mut barrel_count: ResMut<BarrelCount>,
     mut query: Query<&mut BarrelManager>,
     mut commands: Commands,
+    mut global_rng: ResMut<GlobalRng>,
     time: Res<Time>,
 ) {
     let mut barrel_manager = query.single_mut();
     barrel_manager.spawn_time.tick(time.delta());
-    while barrel_count.0 < barrel_manager.dificulty as isize {
-        commands.run_system(barrel_manager.spawn_system);
-        barrel_count.0 += 1;
+    if barrel_manager.spawn_time.finished() {
+        barrel_manager.spawn_time =
+            Timer::from_seconds(SPAWN_MIN_DELAY + global_rng.f32(), TimerMode::Once);
+        if barrel_count.0 < barrel_manager.dificulty {
+            commands.run_system(barrel_manager.spawn_system);
+            barrel_count.0 += 1.0;
+        }
     }
 }
 
@@ -114,7 +145,7 @@ fn spawn_barrel(
         .spawn((
             SpatialBundle::from_transform(Transform::from_xyz(x, y, 0.0)),
             BarrelSpawnAnimation {
-                time: Timer::from_seconds(SPAWN_DELAY, TimerMode::Once),
+                time: Timer::from_seconds(SPAWN_ANIMATION_DURATION, TimerMode::Once),
             },
             Barrel,
         ))
@@ -125,7 +156,7 @@ fn spawn_barrel(
                 transform.rotation = rotation;
                 barrel.spawn((
                     SpriteSheetBundle {
-                        texture_atlas: texture_atlas_handle.0.clone(),
+                        texture_atlas: texture_atlas_handle.sprite_texture.clone(),
                         sprite: TextureAtlasSprite {
                             index: i,
                             flip_x: true,
@@ -137,52 +168,60 @@ fn spawn_barrel(
                     BarrelSprite(i),
                 ));
             }
+            barrel.spawn((
+                MaterialMesh2dBundle {
+                    mesh: texture_atlas_handle.shadow_mesh.clone(),
+                    material: texture_atlas_handle.shadow_material.clone(),
+                    transform: Transform::from_scale(Vec3::splat(0.0)),
+                    ..default()
+                },
+                BarrelShadow,
+            ));
         });
 }
 
-fn get_eased_percent(percent: f32) -> f32 {
-    // https://github.com/PistonDevelopers/interpolation/blob/98f3e451b49a3901c9c88581beb80757bd475e07/src/ease.rs#L363
-    if percent < 4.0 / 11.0 {
-        (121.0 * percent * percent) / 16.0
-    } else if percent < 8.0 / 11.0 {
-        (363.0 / 40.0 * percent * percent) - (99.0 / 10.0 * percent) + 17.0 / 5.0
-    } else if percent < 9.0 / 10.0 {
-        (4356.0 / 361.0 * percent * percent) - (35442.0 / 1805.0 * percent) + 16061.0 / 1805.0
-    } else {
-        (54.0 / 5.0 * percent * percent) - (513.0 / 25.0 * percent) + 268.0 / 25.0
-    }
-}
-
-fn aply_percent_by_index(index: usize, percent: f32) -> Vec3 {
-    let height = f32::max(0.0, WINDOW_HEIGHT - (WINDOW_HEIGHT * percent));
-    Vec3::new(0.0, height + index as f32, index as f32)
-}
-
-fn update_barrel_spawn(
-    mut barrel_query: Query<(&mut BarrelSpawnAnimation, &Children, Entity), With<Barrel>>,
-    mut sprites_query: Query<(&mut Transform, &BarrelSprite), Without<Barrel>>,
+fn update_barrel_spawn_animation(
+    mut barrel_query: Query<
+        (&mut BarrelSpawnAnimation, &Children, Entity),
+        (With<Barrel>, Without<BarrelSprite>, Without<BarrelShadow>),
+    >,
+    mut sprites_query: Query<
+        (&mut Transform, &BarrelSprite),
+        (Without<Barrel>, Without<BarrelShadow>),
+    >,
+    mut shadow_query: Query<
+        &mut Transform,
+        (With<BarrelShadow>, Without<Barrel>, Without<BarrelSprite>),
+    >,
     time: Res<Time>,
     mut commands: Commands,
+    mut barrel_count: ResMut<BarrelCount>,
 ) {
     for (mut barrel_props, children, entity) in &mut barrel_query {
         barrel_props.time.tick(time.delta());
         if barrel_props.time.finished() {
+            // Remove 1/4 of a barrel
+            barrel_count.0 -= 0.25;
             commands.entity(entity).remove::<BarrelSpawnAnimation>();
-            commands.entity(entity).insert(BarrelExplotionAnimation {
-                time: Timer::from_seconds(EXPLOTION_DELAY, TimerMode::Once),
+            commands.entity(entity).insert(BarrelExplosionAnimation {
+                time: Timer::from_seconds(EXPLOSION_ANIMATION_DURATION, TimerMode::Once),
             });
         }
-        let percent = get_eased_percent(barrel_props.time.percent());
+        let percent = barrel_props.time.percent().bounce_out();
+        let current_height = f32::max(0.0, WINDOW_HEIGHT - (WINDOW_HEIGHT * percent));
         for child in children {
             if let Ok((mut transform, index)) = sprites_query.get_mut(*child) {
-                transform.translation = aply_percent_by_index(index.0, percent);
+                transform.translation =
+                    Vec3::new(0.0, current_height + index.0 as f32, index.0 as f32);
+            } else if let Ok(mut transform) = shadow_query.get_mut(*child) {
+                transform.scale = Vec3::new(percent, percent, 0.0);
             }
         }
     }
 }
 
-fn update_barrel_explotion(
-    mut barrel_query: Query<(&mut BarrelExplotionAnimation, Entity), With<Barrel>>,
+fn update_barrel_explosion(
+    mut barrel_query: Query<(&mut BarrelExplosionAnimation, Entity), With<Barrel>>,
     time: Res<Time>,
     mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
@@ -191,7 +230,8 @@ fn update_barrel_explotion(
         barrel_props.time.tick(time.delta());
         if barrel_props.time.finished() {
             commands.entity(e).despawn_recursive();
-            barrel_count.0 -= 1;
+            // Remove 3/4 of a barrel
+            barrel_count.0 -= 0.75;
         }
     }
 }

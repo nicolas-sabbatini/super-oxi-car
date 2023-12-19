@@ -1944,6 +1944,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "interpolation"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9c13ae9d91148fcb4aab6654c4c2a7d02a15395ea9e23f65170f175f8b269ce"
+
+[[package]]
 name = "io-kit-sys"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2918,6 +2924,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_turborand",
+ "interpolation",
 ]
 
 [[package]]
