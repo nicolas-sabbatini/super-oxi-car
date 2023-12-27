@@ -14,7 +14,7 @@ use bevy_turborand::prelude::*;
 use interpolation::Ease;
 
 use crate::{
-    config::{P8_GREY, WINDOW_HEIGHT, WINDOW_WIDTH},
+    config::{P8_GREY, P8_RED, WINDOW_HEIGHT, WINDOW_WIDTH},
     TILE_SIZE,
 };
 
@@ -38,6 +38,11 @@ struct BarrelSpawnAnimation {
 }
 
 #[derive(Component)]
+struct BarrelAlive {
+    time: Timer,
+}
+
+#[derive(Component)]
 struct BarrelExplosionAnimation {
     time: Timer,
 }
@@ -53,6 +58,7 @@ struct BarrelAssets {
     sprite_texture: Handle<TextureAtlas>,
     shadow_mesh: Mesh2dHandle,
     shadow_material: Handle<ColorMaterial>,
+    explosion_material: Handle<ColorMaterial>,
 }
 
 #[derive(Resource)]
@@ -67,6 +73,7 @@ impl Plugin for Plug {
                 (
                     manage_barrels,
                     update_barrel_explosion,
+                    update_barrel_alive,
                     update_barrel_spawn_animation,
                 ),
             )
@@ -91,13 +98,14 @@ fn load_barrel(
             .add(shape::Circle::new(TILE_SIZE * 0.5).into())
             .into(),
         shadow_material: materials.add(P8_GREY.into()),
+        explosion_material: materials.add(P8_RED.into()),
     });
 }
 
 fn setup_manager(world: &mut World) {
     let spawn_barrel = world.register_system(spawn_barrel);
     world.spawn(BarrelManager {
-        dificulty: 6.0,
+        dificulty: 4.0,
         spawn_time: Timer::from_seconds(SPAWN_MIN_DELAY, TimerMode::Once),
         spawn_system: spawn_barrel,
     });
@@ -196,6 +204,7 @@ fn update_barrel_spawn_animation(
     time: Res<Time>,
     mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
+    mut global_rng: ResMut<GlobalRng>,
 ) {
     for (mut barrel_props, children, entity) in &mut barrel_query {
         barrel_props.time.tick(time.delta());
@@ -203,8 +212,8 @@ fn update_barrel_spawn_animation(
             // Remove 1/4 of a barrel
             barrel_count.0 -= 0.25;
             commands.entity(entity).remove::<BarrelSpawnAnimation>();
-            commands.entity(entity).insert(BarrelExplosionAnimation {
-                time: Timer::from_seconds(EXPLOSION_ANIMATION_DURATION, TimerMode::Once),
+            commands.entity(entity).insert(BarrelAlive {
+                time: Timer::from_seconds(global_rng.f32() * 10.0, TimerMode::Once),
             });
         }
         let percent = barrel_props.time.percent().bounce_out();
@@ -220,8 +229,8 @@ fn update_barrel_spawn_animation(
     }
 }
 
-fn update_barrel_explosion(
-    mut barrel_query: Query<(&mut BarrelExplosionAnimation, Entity), With<Barrel>>,
+fn update_barrel_alive(
+    mut barrel_query: Query<(&mut BarrelAlive, Entity), With<Barrel>>,
     time: Res<Time>,
     mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
@@ -229,9 +238,57 @@ fn update_barrel_explosion(
     for (mut barrel_props, e) in &mut barrel_query {
         barrel_props.time.tick(time.delta());
         if barrel_props.time.finished() {
-            commands.entity(e).despawn_recursive();
-            // Remove 3/4 of a barrel
-            barrel_count.0 -= 0.75;
+            // Remove 1/4 of a barrel
+            barrel_count.0 -= 0.25;
+            commands.entity(e).remove::<BarrelAlive>();
+            commands.entity(e).insert(BarrelExplosionAnimation {
+                time: Timer::from_seconds(EXPLOSION_ANIMATION_DURATION, TimerMode::Once),
+            });
+        }
+    }
+}
+
+fn update_barrel_explosion(
+    mut barrel_query: Query<
+        (&mut BarrelExplosionAnimation, &Children, Entity),
+        (With<Barrel>, Without<BarrelSprite>, Without<BarrelShadow>),
+    >,
+    mut sprites_query: Query<
+        (&mut Transform, &BarrelSprite),
+        (Without<Barrel>, Without<BarrelShadow>),
+    >,
+    mut shadow_query: Query<
+        (&mut Transform, &mut Handle<ColorMaterial>),
+        (With<BarrelShadow>, Without<Barrel>, Without<BarrelSprite>),
+    >,
+    time: Res<Time>,
+    mut commands: Commands,
+    mut barrel_count: ResMut<BarrelCount>,
+    texture_atlas_handle: Res<BarrelAssets>,
+) {
+    for (mut barrel_props, children, entity) in &mut barrel_query {
+        barrel_props.time.tick(time.delta());
+        if barrel_props.time.finished() {
+            commands.entity(entity).despawn_recursive();
+            // Remove 2/4 of a barrel
+            barrel_count.0 -= 0.50;
+        }
+        for child in children {
+            if let Ok((mut transform, index)) = sprites_query.get_mut(*child) {
+                let percent = barrel_props.time.percent() * 0.25;
+                let sin = ((barrel_props.time.percent() + index.0 as f32 * 0.11) * 40.0).sin()
+                    * 0.15
+                    + 0.15;
+                transform.scale = Vec3::new(1.0 + percent + sin, 1.0 + percent + sin, 1.0);
+            }
+            if let Ok((mut transform, mut color)) = shadow_query.get_mut(*child) {
+                transform.scale = Vec3::new(
+                    1.0 + (barrel_props.time.percent() * 1.5),
+                    1.0 + (barrel_props.time.percent() * 1.5),
+                    1.0,
+                );
+                *color = texture_atlas_handle.explosion_material.clone();
+            }
         }
     }
 }

@@ -53,7 +53,7 @@ pub const P8_RED: Color = Color::Rgba {
     red: 0xFF as f32 / 255.0,
     green: 0x00 as f32 / 255.0,
     blue: 0x4D as f32 / 255.0,
-    alpha: 1.0,
+    alpha: 0.5,
 };
 pub const P8_ORANGE: Color = Color::Rgba {
     red: 0xFF as f32 / 255.0,
