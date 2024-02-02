@@ -25,8 +25,8 @@ const BGRA_PIXEL_SIZE: usize = 4;
 #[derive(Debug, Component)]
 pub struct GameCamera;
 
-pub struct CameraPlugin;
-impl Plugin for CameraPlugin {
+pub struct Plug;
+impl Plugin for Plug {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, setup_camera);
     }

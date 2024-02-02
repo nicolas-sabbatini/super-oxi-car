@@ -15,7 +15,7 @@ use interpolation::Ease;
 
 use crate::{
     config::{P8_GREY, P8_RED, WINDOW_HEIGHT, WINDOW_WIDTH},
-    TILE_SIZE,
+    particle, TILE_SIZE,
 };
 
 const SPAWN_MIN_DELAY: f32 = 0.4;
@@ -250,7 +250,7 @@ fn update_barrel_alive(
 
 fn update_barrel_explosion(
     mut barrel_query: Query<
-        (&mut BarrelExplosionAnimation, &Children, Entity),
+        (&mut BarrelExplosionAnimation, &Transform, &Children, Entity),
         (With<Barrel>, Without<BarrelSprite>, Without<BarrelShadow>),
     >,
     mut sprites_query: Query<
@@ -265,13 +265,15 @@ fn update_barrel_explosion(
     mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
     texture_atlas_handle: Res<BarrelAssets>,
+    mut spawn_event: EventWriter<particle::SpawnEvent>,
 ) {
-    for (mut barrel_props, children, entity) in &mut barrel_query {
+    for (mut barrel_props, pos, children, entity) in &mut barrel_query {
         barrel_props.time.tick(time.delta());
         if barrel_props.time.finished() {
             commands.entity(entity).despawn_recursive();
             // Remove 2/4 of a barrel
             barrel_count.0 -= 0.50;
+            spawn_event.send(particle::SpawnEvent(pos.translation));
         }
         for child in children {
             if let Ok((mut transform, index)) = sprites_query.get_mut(*child) {

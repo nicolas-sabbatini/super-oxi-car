@@ -1,4 +1,4 @@
-#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::cast_precision_loss, dead_code)]
 use bevy::prelude::Color;
 
 pub const P8_BLACK: Color = Color::Rgba {

@@ -1,10 +1,9 @@
 #![allow(clippy::needless_pass_by_value)]
 use bevy::{prelude::*, text::BreakLineOn};
 
-use crate::config::{P8_BLACK, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::config::{P8_BLACK, WINDOW_HEIGHT};
 
 const SCORE_HEIGHT: f32 = 64.0;
-const SCORE_OFFSET: f32 = WINDOW_WIDTH * -0.4;
 
 #[derive(Component)]
 struct Score;
@@ -40,7 +39,7 @@ fn setup_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 linebreak_behavior: BreakLineOn::AnyCharacter,
             },
             transform: Transform::from_translation(Vec3::new(
-                SCORE_OFFSET,
+                0.0,
                 (WINDOW_HEIGHT - SCORE_HEIGHT) * 0.5,
                 99.,
             )),

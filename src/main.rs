@@ -1,11 +1,11 @@
 use bevy::{prelude::*, window::WindowResolution};
 use bevy_turborand::prelude::RngPlugin;
-use camera::CameraPlugin;
 use config::{WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH};
 
 mod barrel;
 mod camera;
 mod config;
+mod particle;
 mod player;
 mod ui;
 
@@ -30,7 +30,13 @@ fn main() {
     ))
     .insert_resource(Msaa::Off);
 
-    app.add_plugins((CameraPlugin, player::Plug, ui::Plug, barrel::Plug));
+    app.add_plugins((
+        camera::Plug,
+        player::Plug,
+        ui::Plug,
+        barrel::Plug,
+        particle::Plug,
+    ));
 
     app.run();
 }
