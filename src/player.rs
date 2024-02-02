@@ -52,10 +52,10 @@ fn set_up_player(
         .spawn((
             SpatialBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
             Movement {
-                top_aceleration: 30.0,
+                top_aceleration: 950.0,
                 acceleration: 0.0,
-                acceleration_rate: 0.2,
-                drag: 0.1,
+                acceleration_rate: 250.0,
+                drag: 0.5,
                 angle: 0.0,
                 velocity: Vec3::new(0.0, 0.0, 0.0),
             },
@@ -101,34 +101,36 @@ fn rotate_player(
 fn move_player(
     keys: Res<Input<KeyCode>>,
     mut query: Query<(&mut Transform, &mut Movement), With<Player>>,
+    time: Res<Time>,
 ) {
     for (mut transform, mut movement) in &mut query {
-        let mut dt_angle = 0.0;
+        let is_drifting = keys.pressed(KeyCode::Space);
         if keys.pressed(KeyCode::A) {
-            dt_angle += 0.015;
+            movement.angle += 0.015;
+            if is_drifting {
+                movement.angle += 0.003;
+            }
         }
         if keys.pressed(KeyCode::D) {
-            dt_angle -= 0.015;
+            movement.angle -= 0.015;
+            if is_drifting {
+                movement.angle -= 0.003;
+            }
         }
 
+        let direction = Vec3::new(movement.angle.cos(), movement.angle.sin(), 0.0).normalize();
         movement.acceleration = f32::min(
             movement.top_aceleration,
-            movement.acceleration + movement.acceleration_rate,
+            movement.acceleration + (movement.acceleration_rate * time.delta_seconds()),
         );
-
-        if keys.pressed(KeyCode::Space) {
-            movement.angle += dt_angle * 1.15;
-            let target_velocity = Vec3::new(movement.angle.cos(), movement.angle.sin(), 0.0)
-                * (movement.acceleration * 0.80);
+        if is_drifting {
+            let target_velocity = direction * (movement.acceleration * 0.8);
             movement.velocity = (target_velocity - movement.velocity) * movement.drag;
         } else {
-            movement.angle += dt_angle;
-            let target_velocity =
-                Vec3::new(movement.angle.cos(), movement.angle.sin(), 0.0) * movement.acceleration;
+            let target_velocity = direction * movement.acceleration;
             movement.velocity = (target_velocity - movement.velocity) * movement.drag;
         }
-
-        transform.translation += movement.velocity;
+        transform.translation += movement.velocity * time.delta_seconds();
 
         // Fix car position if it goes out of screen
         let screen_limit_x = (WINDOW_WIDTH + CAR_SIZE) * 0.5;
