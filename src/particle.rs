@@ -1,6 +1,7 @@
 #![allow(clippy::needless_pass_by_value, clippy::cast_precision_loss)]
 use bevy::prelude::*;
 use bevy_turborand::{DelegatedRng, GlobalRng};
+use interpolation::Ease;
 
 use crate::TILE_SIZE;
 
@@ -42,36 +43,49 @@ fn spawn_particle(
     mut global_rng: ResMut<GlobalRng>,
 ) {
     for pos in spawn_event.read() {
-        let pos_offset = Vec3::new(
-            (global_rng.f32() - 0.5) * TILE_SIZE * 0.5,
-            (global_rng.f32() - 0.5) * TILE_SIZE * 0.5,
-            (global_rng.f32() - 0.5) * TILE_SIZE * 0.5,
-        );
-        let velosity = Vec3::new(0.0, global_rng.f32() * 10.0 + 32.0, 0.0);
-        commands.spawn((
-            SpriteBundle {
-                texture: particle_assets.texture.clone(),
-                transform: Transform::from_translation(pos.0 + pos_offset),
-                ..Default::default()
-            },
-            Particle {
-                timer: Timer::from_seconds(PARTICLE_LIFE, TimerMode::Once),
-                velosity,
-            },
-        ));
+        for _i in 0..global_rng.usize(20..30) {
+            let pos_offset = Vec3::new(
+                (global_rng.f32() - 0.5) * TILE_SIZE,
+                (global_rng.f32() - 0.5) * TILE_SIZE,
+                (global_rng.f32() - 0.5) * TILE_SIZE + 30.0,
+            );
+            let x_velosity = (global_rng.f32() - 0.5) * 300.0;
+            let y_velosity = global_rng.f32() * 100.0 + 150.0;
+            let velosity = Vec3::new(x_velosity, y_velosity, 0.0);
+            commands.spawn((
+                SpriteBundle {
+                    texture: particle_assets.texture.clone(),
+                    transform: Transform::from_translation(pos.0 + pos_offset),
+                    ..Default::default()
+                },
+                Particle {
+                    timer: Timer::from_seconds(PARTICLE_LIFE, TimerMode::Once),
+                    velosity,
+                },
+            ));
+        }
     }
+    spawn_event.clear();
 }
 
 fn update_particle(
     mut commands: Commands,
     time: Res<Time>,
-    mut particle_query: Query<(&mut Transform, &mut Particle, Entity)>,
+    mut particle_query: Query<(&mut Transform, &mut Particle, &mut Sprite, Entity)>,
 ) {
-    for (mut pos, mut properties, entity) in &mut particle_query {
+    for (mut pos, mut properties, mut sprite, entity) in &mut particle_query {
         properties.timer.tick(time.delta());
         if properties.timer.finished() {
             commands.entity(entity).despawn_recursive();
         } else {
+            let percent = properties.timer.percent().exponential_in();
+            let new_color = Color::Rgba {
+                red: 1.0,
+                green: 1.0,
+                blue: 1.0,
+                alpha: 1.0 - percent,
+            };
+            sprite.color = new_color;
             pos.translation += properties.velosity * time.delta_seconds();
         }
     }

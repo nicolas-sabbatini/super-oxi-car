@@ -5,6 +5,8 @@
     clippy::cast_sign_loss,
     clippy::module_name_repetitions
 )]
+use core::f32;
+
 use bevy::{
     core_pipeline::clear_color::ClearColorConfig,
     prelude::*,
@@ -22,13 +24,26 @@ use crate::config::{
 
 const BGRA_PIXEL_SIZE: usize = 4;
 
+const CAMERA_SHAKE_SPEED: f32 = 130.0;
+const CAMERA_SHAKE_TO: f32 = 7.0;
+
 #[derive(Debug, Component)]
-pub struct GameCamera;
+pub struct GameCamera {
+    shake_queue: Vec<f32>,
+}
+
+#[derive(Event)]
+pub struct ShakeCameraEvent(pub f32);
+
+#[derive(Resource)]
+struct ShakeDirection(f32);
 
 pub struct Plug;
 impl Plugin for Plug {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_camera);
+        app.add_event::<ShakeCameraEvent>()
+            .add_systems(Startup, (setup_camera, init_shake_resource))
+            .add_systems(Update, shake_camera);
     }
 }
 
@@ -98,5 +113,42 @@ fn setup_camera(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands
         .spawn(game_camera)
         .insert(Name::new(GAME_CAMERA_NAME))
-        .insert(GameCamera);
+        .insert(GameCamera {
+            shake_queue: Vec::new(),
+        });
+}
+
+fn init_shake_resource(mut commands: Commands) {
+    commands.insert_resource(ShakeDirection(1.0));
+}
+
+fn shake_camera(
+    mut shake_event: EventReader<ShakeCameraEvent>,
+    mut camera_querry: Query<(&mut GameCamera, &mut Transform)>,
+    time: Res<Time>,
+    mut shake_dir: ResMut<ShakeDirection>,
+) {
+    let (mut camera_prop, mut pos) = camera_querry
+        .get_single_mut()
+        .expect("Failed to get game camera");
+    camera_prop.shake_queue.retain(|f| *f > 0.0);
+    for event in shake_event.read() {
+        camera_prop.shake_queue.push(event.0);
+    }
+    let tick = time.delta().as_secs_f32();
+    for time in &mut camera_prop.shake_queue {
+        *time -= tick;
+    }
+    let mut target = Vec3::new(CAMERA_SHAKE_TO * shake_dir.0, 0.0, 0.0);
+    if camera_prop.shake_queue.is_empty() {
+        target = Vec3::ZERO;
+    }
+    if (target.x - pos.translation.x).abs() < 0.25 {
+        pos.translation = target;
+        shake_dir.0 *= -1.0;
+    } else if (target.x - pos.translation.x).is_sign_negative() {
+        pos.translation.x += CAMERA_SHAKE_SPEED * -1.0 * tick;
+    } else {
+        pos.translation.x += CAMERA_SHAKE_SPEED * tick;
+    }
 }

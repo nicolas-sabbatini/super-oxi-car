@@ -14,6 +14,7 @@ use bevy_turborand::prelude::*;
 use interpolation::Ease;
 
 use crate::{
+    camera,
     config::{P8_GREY, P8_RED, WINDOW_HEIGHT, WINDOW_WIDTH},
     particle, TILE_SIZE,
 };
@@ -195,7 +196,7 @@ fn update_barrel_spawn_animation(
     >,
     mut sprites_query: Query<
         (&mut Transform, &BarrelSprite),
-        (Without<Barrel>, Without<BarrelShadow>),
+        (With<BarrelSprite>, Without<Barrel>, Without<BarrelShadow>),
     >,
     mut shadow_query: Query<
         &mut Transform,
@@ -206,9 +207,9 @@ fn update_barrel_spawn_animation(
     mut barrel_count: ResMut<BarrelCount>,
     mut global_rng: ResMut<GlobalRng>,
 ) {
-    for (mut barrel_props, children, entity) in &mut barrel_query {
-        barrel_props.time.tick(time.delta());
-        if barrel_props.time.finished() {
+    for (mut barrel_animation_props, children, entity) in &mut barrel_query {
+        barrel_animation_props.time.tick(time.delta());
+        if barrel_animation_props.time.finished() {
             // Remove 1/4 of a barrel
             barrel_count.0 -= 0.25;
             commands.entity(entity).remove::<BarrelSpawnAnimation>();
@@ -216,7 +217,7 @@ fn update_barrel_spawn_animation(
                 time: Timer::from_seconds(global_rng.f32() * 10.0, TimerMode::Once),
             });
         }
-        let percent = barrel_props.time.percent().bounce_out();
+        let percent = barrel_animation_props.time.percent().bounce_out();
         let current_height = f32::max(0.0, WINDOW_HEIGHT - (WINDOW_HEIGHT * percent));
         for child in children {
             if let Ok((mut transform, index)) = sprites_query.get_mut(*child) {
@@ -235,19 +236,20 @@ fn update_barrel_alive(
     mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
 ) {
-    for (mut barrel_props, e) in &mut barrel_query {
-        barrel_props.time.tick(time.delta());
-        if barrel_props.time.finished() {
+    for (mut barrel_animation_props, entity) in &mut barrel_query {
+        barrel_animation_props.time.tick(time.delta());
+        if barrel_animation_props.time.finished() {
             // Remove 1/4 of a barrel
             barrel_count.0 -= 0.25;
-            commands.entity(e).remove::<BarrelAlive>();
-            commands.entity(e).insert(BarrelExplosionAnimation {
+            commands.entity(entity).remove::<BarrelAlive>();
+            commands.entity(entity).insert(BarrelExplosionAnimation {
                 time: Timer::from_seconds(EXPLOSION_ANIMATION_DURATION, TimerMode::Once),
             });
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update_barrel_explosion(
     mut barrel_query: Query<
         (&mut BarrelExplosionAnimation, &Transform, &Children, Entity),
@@ -255,17 +257,18 @@ fn update_barrel_explosion(
     >,
     mut sprites_query: Query<
         (&mut Transform, &BarrelSprite),
-        (Without<Barrel>, Without<BarrelShadow>),
+        (With<BarrelSprite>, Without<Barrel>, Without<BarrelShadow>),
     >,
     mut shadow_query: Query<
         (&mut Transform, &mut Handle<ColorMaterial>),
         (With<BarrelShadow>, Without<Barrel>, Without<BarrelSprite>),
     >,
-    time: Res<Time>,
-    mut commands: Commands,
     mut barrel_count: ResMut<BarrelCount>,
-    texture_atlas_handle: Res<BarrelAssets>,
+    mut commands: Commands,
     mut spawn_event: EventWriter<particle::SpawnEvent>,
+    mut shake_event: EventWriter<camera::ShakeCameraEvent>,
+    texture_atlas_handle: Res<BarrelAssets>,
+    time: Res<Time>,
 ) {
     for (mut barrel_props, pos, children, entity) in &mut barrel_query {
         barrel_props.time.tick(time.delta());
@@ -274,6 +277,7 @@ fn update_barrel_explosion(
             // Remove 2/4 of a barrel
             barrel_count.0 -= 0.50;
             spawn_event.send(particle::SpawnEvent(pos.translation));
+            shake_event.send(camera::ShakeCameraEvent(0.25));
         }
         for child in children {
             if let Ok((mut transform, index)) = sprites_query.get_mut(*child) {
